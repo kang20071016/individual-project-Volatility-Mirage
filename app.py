@@ -1,5 +1,8 @@
 """Volatility Mirage visual prototype. All displayed observations are simulated."""
 
+import json
+from pathlib import Path
+
 import altair as alt
 import numpy as np
 import pandas as pd
@@ -88,7 +91,7 @@ heat_chart = style(alt.Chart(heat).mark_rect().encode(
     color=alt.Color("spread:Q",title="低波－高波（百分点）",scale=alt.Scale(domainMid=0,range=[CORAL,"#234052",CYAN])),
     tooltip=["年份:N","季度:N",alt.Tooltip("spread:Q",format=".2f")]).properties(height=220))
 
-overview, lab, evidence, ai = st.tabs(["概览", "交互实验", "证据中心", "研究助手"])
+overview, lab, evidence, audit_tab, ai = st.tabs(["概览", "交互实验", "证据中心", "数据体检", "研究助手"])
 with overview:
     st.subheader("风险与收益，真的总是同向吗？")
     st.caption("图表来自固定随机种子的模拟数据，仅用于体验界面和联动，不能据此判断真实 A 股。")
@@ -114,6 +117,16 @@ with evidence:
     st.subheader("从现象走向证据")
     st.altair_chart(heat_chart,width="stretch")
     st.info("真实数据接入后在此显示显著性检验、风险调整 Alpha、IVOL 回归和稳健性。当前没有实证统计量。")
+with audit_tab:
+    st.subheader("真实数据小样本体检")
+    st.write("先验证字段、日期和缺失，再扩大到全市场。这一页与前面的模拟图表相互独立。")
+    audit_path = Path(__file__).parent / "data" / "raw" / "pilot" / "audit.json"
+    if audit_path.exists():
+        audit_rows = json.loads(audit_path.read_text(encoding="utf-8"))
+        st.dataframe(pd.DataFrame(audit_rows), width="stretch", hide_index=True)
+        st.caption("来源：本机 Tushare 小样本探针；原始记录保存在 Git 忽略目录。它只能证明所测字段可用，尚不能支持低波异象结论。")
+    else:
+        st.info("此环境尚无本地探针结果。按 docs/data-sources.md 的步骤配置 TUSHARE_TOKEN 后运行 scripts/probe_tushare.py。")
 with ai:
     st.subheader("研究助手 · 交互逻辑预览")
     question = st.selectbox("选择问题",["换成市值加权后结论还成立吗？","低波优势是否依赖某一板块？","为什么不能只看净值曲线？"])
