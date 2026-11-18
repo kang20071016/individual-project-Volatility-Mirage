@@ -1,6 +1,7 @@
 """Volatility Mirage visual prototype. All displayed observations are simulated."""
 
 import json
+import os
 from pathlib import Path
 
 import altair as alt
@@ -141,14 +142,9 @@ with ai:
         stored_key = st.secrets.get("OPENROUTER_API_KEY", "")
     except (FileNotFoundError, OSError):
         stored_key = ""
-    import os
-    with st.expander("连接免费 AI 模型", expanded=not bool(stored_key or os.getenv("OPENROUTER_API_KEY"))):
-        st.write("使用 OpenRouter 免费模型路由。密钥仅用于当前浏览器会话；部署者也可通过环境变量或 Streamlit Secrets 配置。")
-        entered_key = st.text_input("OpenRouter API Key", type="password", key="openrouter_key", placeholder="粘贴你在 OpenRouter 创建的 API Key")
-        st.markdown("[获取免费 API Key](https://openrouter.ai/keys) · [免费模型与额度说明](https://openrouter.ai/collections/free-models/)")
-    api_key = entered_key or stored_key or os.getenv("OPENROUTER_API_KEY", "")
+    api_key = stored_key or os.getenv("OPENROUTER_API_KEY", "")
     if not api_key:
-        st.info("填写 OpenRouter API Key 后即可发送消息。免费模型有调用次数限制。")
+        st.info("研究助手暂未上线，项目维护者完成服务配置后即可直接对话。")
     if "research_history" not in st.session_state:
         st.session_state.research_history = []
     history = st.session_state.research_history
