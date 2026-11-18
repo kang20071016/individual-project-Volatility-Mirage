@@ -7,6 +7,7 @@ import altair as alt
 import numpy as np
 import pandas as pd
 import streamlit as st
+from research_chat import ask_free_model, build_evidence
 
 st.set_page_config(page_title="Volatility Mirage", page_icon="📈", layout="wide")
 CYAN, CORAL, MUTED = "#39dce5", "#f08876", "#91a7b6"
@@ -25,6 +26,8 @@ div[data-testid='stMetricLabel'] {color:#a2b9c5}
 .vm-tag {display:inline-block;border:1px solid #27707b;color:#8fe8e9;border-radius:20px;padding:.28rem .7rem;font-size:.72rem}
 .vm-rule {border-top:1px solid #254255;margin:1.1rem 0}
 .vm-answer {border-left:2px solid #39dce5;padding:.2rem 0 .2rem 1rem;line-height:1.8;color:#d4e5eb}
+div[data-testid='stChatMessage'] {background:#0e2232;border:1px solid #244456;border-radius:12px}
+div[data-testid='stChatInput'] {border:1px solid #28717a;border-radius:12px}
 </style>""", unsafe_allow_html=True)
 
 @st.cache_data
@@ -128,13 +131,45 @@ with audit_tab:
     else:
         st.info("此环境尚无本地探针结果。按 docs/data-sources.md 的步骤配置 TUSHARE_TOKEN 后运行 scripts/probe_tushare.py。")
 with ai:
-    st.subheader("研究助手 · 交互逻辑预览")
-    question = st.selectbox("选择问题",["换成市值加权后结论还成立吗？","低波优势是否依赖某一板块？","为什么不能只看净值曲线？"])
-    if question.startswith("换成"):
-        answer = "需要在相同样本下比较等权与市值加权的收益差，再检查显著性和样本覆盖。当前仅有模拟数据，无法判断真实市场结论。"
-    elif question.startswith("低波优势"):
-        answer = "应分板块比较收益差、置信区间和年份稳定性，并留意科创板历史较短。真实面板尚未接入。"
-    else:
-        answer = "净值曲线无法说明统计显著性、因子暴露与筛选偏差。还要看十分位梯度、风险调整和分期结果。"
-    st.markdown(f'<div class="vm-answer">{answer}</div>',unsafe_allow_html=True)
-    st.caption("这是规则化交互原型。正式 AI 将读取当前参数和计算结果组成的证据包，并引用指标来源。")
+    title_col, clear_col = st.columns([5, 1])
+    title_col.subheader("研究助手 · 自由对话")
+    if clear_col.button("清空对话", use_container_width=True):
+        st.session_state.research_history = []
+        st.rerun()
+    st.caption("可以自由提问和连续追问。助手会读取左侧实验参数及当前图表指标；这些指标目前全部来自模拟数据。")
+    try:
+        stored_key = st.secrets.get("OPENROUTER_API_KEY", "")
+    except (FileNotFoundError, OSError):
+        stored_key = ""
+    import os
+    with st.expander("连接免费 AI 模型", expanded=not bool(stored_key or os.getenv("OPENROUTER_API_KEY"))):
+        st.write("使用 OpenRouter 免费模型路由。密钥仅用于当前浏览器会话；部署者也可通过环境变量或 Streamlit Secrets 配置。")
+        entered_key = st.text_input("OpenRouter API Key", type="password", key="openrouter_key", placeholder="粘贴你在 OpenRouter 创建的 API Key")
+        st.markdown("[获取免费 API Key](https://openrouter.ai/keys) · [免费模型与额度说明](https://openrouter.ai/collections/free-models/)")
+    api_key = entered_key or stored_key or os.getenv("OPENROUTER_API_KEY", "")
+    if not api_key:
+        st.info("填写 OpenRouter API Key 后即可发送消息。免费模型有调用次数限制。")
+    if "research_history" not in st.session_state:
+        st.session_state.research_history = []
+    history = st.session_state.research_history
+    if not history:
+        with st.chat_message("assistant", avatar="📊"):
+            st.write("你好，我可以根据当前筛选条件解释图表、讨论低波动异象的检验方法，也能接着你的问题追问。你想从哪里开始？")
+    for item in history:
+        with st.chat_message(item["role"], avatar="📊" if item["role"] == "assistant" else None):
+            st.write(item["content"])
+    prompt = st.chat_input("例如：低波组合的优势在当前参数下有多大？", disabled=not bool(api_key))
+    if prompt:
+        history.append({"role": "user", "content": prompt[:1600]})
+        with st.chat_message("user"):
+            st.write(prompt)
+        evidence_pack = build_evidence(start, end, board, measure, weight, spread, ranked)
+        with st.chat_message("assistant", avatar="📊"):
+            with st.spinner("正在分析当前实验结果…"):
+                try:
+                    answer = ask_free_model(api_key, history, evidence_pack)
+                except (RuntimeError, ValueError) as exc:
+                    st.error(str(exc))
+                else:
+                    st.write(answer)
+                    history.append({"role": "assistant", "content": answer})
