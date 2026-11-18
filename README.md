@@ -9,7 +9,17 @@ python -m pip install -r requirements.txt
 streamlit run app.py
 ```
 
-展开左侧参数面板，可切换年份、板块、波动率口径和组合权重。首页图表随之更新。证据中心和研究助手目前展示设计中的交互路径，尚未接入真实数据和大模型。
+展开左侧参数面板，可切换年份、板块、波动率口径和组合权重。首页图表随之更新。证据中心尚未接入真实统计检验。
+
+## 研究助手（免费模型）
+
+研究助手支持自由输入、多轮追问，并把当前筛选参数和模拟指标一并交给模型。它会明确区分模拟演示与真实 A 股证据；尚不能作出真实市场的实证结论。
+
+1. 在 [OpenRouter 的密钥页面](https://openrouter.ai/keys) 创建 API Key。
+2. 打开应用的“研究助手”，在“连接免费 AI 模型”中输入密钥，随后发送消息。密钥只保存在当前 Streamlit 会话中，不写入仓库。
+3. 如需部署者统一提供密钥，可设置环境变量 `OPENROUTER_API_KEY`，或在 Streamlit Cloud 的 Secrets 中设置同名字段。不要把密钥提交到 GitHub。
+
+应用固定调用 `openrouter/free`，不会自动切换到付费模型。免费模型有调用次数限制，且不同请求可能路由到不同模型；[查看官方说明](https://openrouter.ai/collections/free-models/)。
 
 “数据体检”页读取本机 `data/raw/pilot/audit.json`，展示 Tushare 字段探针结果。此目录被 Git 忽略，云端部署默认不会显示本地记录。运行探针时，先在本机环境设置 `TUSHARE_TOKEN`，再执行 `python scripts/probe_tushare.py`。
 
