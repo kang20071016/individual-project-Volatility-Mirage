@@ -9,15 +9,17 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 from analysis import spread_diagnostics
-from research_chat import ask_free_model, build_evidence
+from research_chat import ask_free_model, build_evidence, explain_without_model
 
 st.set_page_config(page_title="Volatility Mirage", page_icon="📈", layout="wide")
 CYAN, CORAL, MUTED = "#39dce5", "#f08876", "#91a7b6"
 
 st.markdown("""
 <style>
-.stApp {background:#07131f;color:#e7f3f5}
+.stApp {background-color:#07131f;background-image:radial-gradient(circle at 86% 5%,rgba(25,176,189,.13),transparent 31%),linear-gradient(rgba(58,133,151,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(58,133,151,.035) 1px,transparent 1px);background-size:auto,36px 36px,36px 36px;color:#e7f3f5}
 .block-container {max-width:1540px;padding-top:1.5rem}
+section[data-testid='stSidebar'] {background:#0a1b2a;border-right:1px solid #254255}
+div[data-testid='stTabs'] button {font-weight:600;letter-spacing:.02em}
 h1,h2,h3 {color:#e7f3f5;font-family:'Segoe UI','Microsoft YaHei',sans-serif}
 div[data-testid='stMetric'] {background:#102235;border:1px solid #254255;border-radius:10px;padding:.65rem .9rem}
 div[data-testid='stMetricLabel'] {color:#a2b9c5}
@@ -26,6 +28,7 @@ div[data-testid='stMetricLabel'] {color:#a2b9c5}
 .vm-title span {color:#39dce5}
 .vm-sub {color:#a3b9c5;margin-bottom:1rem}
 .vm-tag {display:inline-block;border:1px solid #27707b;color:#8fe8e9;border-radius:20px;padding:.28rem .7rem;font-size:.72rem}
+.vm-tag {box-shadow:0 0 22px rgba(57,220,229,.13)}
 .vm-rule {border-top:1px solid #254255;margin:1.1rem 0}
 .vm-answer {border-left:2px solid #39dce5;padding:.2rem 0 .2rem 1rem;line-height:1.8;color:#d4e5eb}
 div[data-testid='stChatMessage'] {background:#0e2232;border:1px solid #244456;border-radius:12px}
@@ -47,31 +50,50 @@ def demo_data():
 def style(chart):
     return chart.configure_view(strokeOpacity=0).configure_axis(labelColor=MUTED,titleColor=MUTED,gridColor="#234052",domainColor="#315164",tickColor="#315164").configure_legend(labelColor="#b7cbd3",titleColor="#b7cbd3",orient="bottom")
 
-st.markdown('<div class="vm-kicker">MARKET RESEARCH / INTERACTIVE LAB</div><div class="vm-title">Volatility <span>Mirage</span></div><div class="vm-sub">A股低波动异象交互研究台 · 从风险收益倒挂到可验证的证据</div><span class="vm-tag">界面原型 · 全部数据均为模拟生成</span><div class="vm-rule"></div>', unsafe_allow_html=True)
+public_dir = Path(__file__).parent / "data" / "public"
+real_path = public_dir / "portfolio_monthly.csv"
+real_available = real_path.exists()
+st.markdown('<div class="vm-kicker">MARKET RESEARCH / INTERACTIVE LAB</div><div class="vm-title">Volatility <span>Mirage</span></div><div class="vm-sub">A股低波动异象交互研究台 · 从风险收益倒挂到可验证的证据</div><div class="vm-rule"></div>', unsafe_allow_html=True)
 
 with st.sidebar:
     st.header("实验参数")
-    start, end = st.slider("样本年份", 2010, 2025, (2010, 2025))
+    source = st.radio("数据模式", ["真实研究样本", "模拟交互演示"] if real_available else ["模拟交互演示"])
+    is_real = source == "真实研究样本"
+    start, end = st.slider("样本年份", 2022, 2025, (2022, 2025)) if is_real else st.slider("样本年份", 2010, 2025, (2010, 2025))
     board = st.selectbox("板块", ["全市场", "主板", "创业板", "科创板"])
-    measure = st.selectbox("波动率口径", ["历史波动率", "特质波动率 IVOL"])
-    weight = st.radio("组合权重", ["等权", "市值加权"], horizontal=True)
+    measure = st.selectbox("波动率口径", ["历史波动率"] if is_real else ["历史波动率", "特质波动率 IVOL"])
+    weight = st.radio("组合权重", ["等权"] if is_real else ["等权", "市值加权"], horizontal=True)
 
-data = demo_data()
+data = pd.read_csv(real_path, parse_dates=["date"]) if is_real else demo_data()
 data = data[data.date.dt.year.between(start, end)].copy()
+all_boards_data = data.copy()
 if board != "全市场":
     data = data[data.board == board].copy()
 if data.empty:
     st.info("这个筛选组合没有模拟样本，请扩大时间范围。")
     st.stop()
-if measure == "特质波动率 IVOL":
+if not is_real and measure == "特质波动率 IVOL":
     data["decile"] = 11 - data["decile"]
-if weight == "市值加权":
+    all_boards_data["decile"] = 11 - all_boards_data["decile"]
+if not is_real and weight == "市值加权":
     data["ret"] += -.0015 + data["decile"]*.0002
-monthly = data.groupby(["date", "decile"], as_index=False)["ret"].mean().sort_values(["decile", "date"])
+    all_boards_data["ret"] += -.0015 + all_boards_data["decile"]*.0002
+if "n" not in data:
+    data["n"] = 1
+source_note = "Tushare Pro · 100 只股票分层抽样 · 探索性实证" if is_real else "固定随机种子生成 · 模拟演示"
+st.markdown(f'<span class="vm-tag">{source_note}</span>', unsafe_allow_html=True)
+if is_real:
+    st.caption("真实样本采用 60 交易日历史波动率排序、下月等权收益；它是分层抽样研究，不代表全 A 股总体。")
+else:
+    st.caption("模拟模式仅用于体验交互和方法，不能推断真实 A 股市场。")
+data["weighted_return"] = data.ret * data.n
+monthly = data.groupby(["date", "decile"], as_index=False).agg(weighted_return=("weighted_return", "sum"), n=("n", "sum"))
+monthly["ret"] = monthly.weighted_return / monthly.n
+monthly = monthly.sort_values(["decile", "date"])
 monthly["value"] = monthly.groupby("decile")["ret"].transform(lambda s: (1+s).cumprod())
 monthly["组合"] = monthly.decile.map({1:"低波组合 D1",10:"高波组合 D10"})
 wide = monthly.pivot(index="date", columns="decile", values="ret")
-spread = wide[1]-wide[10]
+spread = (wide[1]-wide[10]).dropna()
 spread_stats, annual_spread, rolling_spread = spread_diagnostics(spread)
 ranked = monthly.groupby("decile", as_index=False).ret.mean()
 ranked["annual"] = ((1+ranked.ret)**12-1)*100
@@ -100,11 +122,11 @@ heat_chart = style(alt.Chart(heat).mark_rect().encode(
 overview, lab, evidence, audit_tab, ai = st.tabs(["概览", "交互实验", "证据中心", "数据体检", "研究助手"])
 with overview:
     st.subheader("风险与收益，真的总是同向吗？")
-    st.caption("图表来自固定随机种子的模拟数据，仅用于体验界面和联动，不能据此判断真实 A 股。")
+    st.caption("图表来源：" + source_note + "。实际研究结果请结合样本限制解读。")
     a,b,c = st.columns(3)
-    a.metric("模拟月均收益差",f"{spread.mean()*100:+.2f} 个百分点")
-    b.metric("模拟正收益年份",f"{int((spread.groupby(spread.index.year).sum()>0).sum())} / {spread.index.year.nunique()}")
-    c.metric("模拟样本月份",f"{len(spread)} 期")
+    a.metric("月均收益差",f"{spread.mean()*100:+.2f} 个百分点")
+    b.metric("正收益年份",f"{int((spread.groupby(spread.index.year).sum()>0).sum())} / {spread.index.year.nunique()}")
+    c.metric("样本月份",f"{len(spread)} 期")
     st.markdown("#### 累计净值走势")
     st.altair_chart(line_chart,width="stretch")
     left,right = st.columns(2,gap="large")
@@ -119,13 +141,36 @@ with lab:
     st.write(f"当前参数：{start}—{end} · {board} · {measure} · {weight}。展开左侧参数面板即可切换。")
     st.altair_chart(line_chart,width="stretch")
     st.altair_chart(bar_chart,width="stretch")
+    st.markdown("#### 板块对照 · D1－D10 月均收益差")
+    comparison = all_boards_data.groupby(["board", "date", "decile"], as_index=False).ret.mean()
+    comparison = comparison[comparison.decile.isin([1, 10])].pivot(index=["board", "date"], columns="decile", values="ret").dropna().reset_index()
+    comparison["spread"] = (comparison[1] - comparison[10]) * 100
+    comparison = comparison.groupby("board", as_index=False).agg(spread=("spread", "mean"), months=("spread", "size"))
+    st.altair_chart(style(alt.Chart(comparison).mark_bar().encode(
+        x=alt.X("board:N", title="板块"), y=alt.Y("spread:Q", title="月均收益差（百分点）"),
+        color=alt.condition(alt.datum.spread >= 0, alt.value(CYAN), alt.value(CORAL)),
+        tooltip=["board:N", alt.Tooltip("spread:Q", format="+.2f"), "months:Q"]).properties(height=220)), width="stretch")
 with evidence:
-    st.subheader("模拟证据诊断")
-    st.caption("以下统计量只对当前筛选后的模拟月度收益差计算，用于展示研究流程，不构成真实 A 股的显著性结论。")
+    st.subheader("收益差与稳健性诊断")
+    st.caption("当前数据：" + source_note + "。统计量描述当前筛选样本，不可外推为全市场因果结论。")
     s1, s2, s3 = st.columns(3)
     s1.metric("低波－高波月均差", f"{spread_stats['mean']*100:+.2f} 个百分点")
     s2.metric("Newey–West t 值", f"{spread_stats['t']:+.2f}")
-    s3.metric("模拟 95% 区间", f"[{spread_stats['ci_low']*100:+.2f}, {spread_stats['ci_high']*100:+.2f}] pp")
+    s3.metric("95% 近似区间", f"[{spread_stats['ci_low']*100:+.2f}, {spread_stats['ci_high']*100:+.2f}] pp")
+    report_md = f"""# Volatility Mirage · 筛选结果摘要
+
+- 数据：{source_note}
+- 筛选：{start}—{end}；{board}；{measure}；{weight}
+- D1－D10 月均收益差：{spread_stats['mean']*100:+.3f} 个百分点
+- Newey–West t 值：{spread_stats['t']:+.3f}
+- 95% 正态近似区间：[{spread_stats['ci_low']*100:+.3f}, {spread_stats['ci_high']*100:+.3f}] 个百分点
+- 有效月数：{spread_stats['n']}
+
+方法：月末用历史波动率排序，比较低波与高波组合的下月收益；均值标准误采用 Bartlett 核、最多 6 阶滞后的 Newey–West 估计。
+
+限制：{'100 股分层探索样本，不代表全 A 股；历史 ST 状态、风险因子和交易成本未完整处理。' if is_real else '本模式为模拟数据，不构成真实市场证据。'}
+"""
+    st.download_button("导出当前研究摘要", report_md, "volatility_mirage_summary.md", "text/markdown")
     left, right = st.columns(2, gap="large")
     with left:
         st.markdown("#### 年度收益差")
@@ -144,8 +189,18 @@ with evidence:
     st.altair_chart(heat_chart, width="stretch")
     with st.expander("统计口径与待完成检验"):
         st.write("年度和滚动收益差为月度 D1－D10 收益差的算术和；区间为 Newey–West（Bartlett 核、最多 6 阶滞后）标准误构造的正态近似区间。月份重叠会影响滚动曲线的独立性。")
-        st.write("正式实证还需要全市场历史样本、退市与 ST 处理、风险因子调整、显著性与子样本稳健性检验。")
+        st.write("全市场结论仍需扩大历史样本、重建历史 ST 状态、风险因子调整及更充分的子样本检验。")
 with audit_tab:
+    if real_available:
+        meta = json.loads((public_dir / "metadata.json").read_text(encoding="utf-8"))
+        st.subheader("100 只股票探索样本 · 数据说明")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("成功采集股票", meta["fetched_stocks"])
+        m2.metric("形成组合的观测", meta["formation_rows"])
+        m3.metric("组合收益月份", f"{meta['first_return_month']} 至 {meta['last_return_month']}")
+        st.caption("Tushare Pro；固定种子 REDACTED 分层随机抽样（主板 50、创业板 25、科创板 25）。60 个交易日历史波动率在月末排序，使用下月复权收益，避免未来信息进入排序。")
+        st.warning("限制：100 只股票不是全市场；当前名称筛选无法还原历史 ST 时段；仅等权、未做因子调整。故结果是探索性证据。")
+        st.download_button("下载月度组合汇总 CSV", real_path.read_bytes(), "volatility_mirage_portfolio_monthly.csv", "text/csv")
     st.subheader("真实数据小样本体检")
     st.write("先验证字段、日期和缺失，再扩大到全市场。这一页与前面的模拟图表相互独立。")
     audit_path = Path(__file__).parent / "data" / "raw" / "pilot" / "audit.json"
@@ -177,14 +232,13 @@ with ai:
     if clear_col.button("清空对话", use_container_width=True):
         st.session_state.research_history = []
         st.rerun()
-    st.caption("可以自由提问和连续追问。助手会读取左侧实验参数及当前图表指标；这些指标目前全部来自模拟数据。")
+    st.caption("可以自由提问和连续追问。助手会读取当前筛选参数及统计量，并区分真实探索样本与模拟演示。")
     try:
         stored_key = st.secrets.get("OPENROUTER_API_KEY", "")
     except (FileNotFoundError, OSError):
         stored_key = ""
     api_key = stored_key or os.getenv("OPENROUTER_API_KEY", "")
-    if not api_key:
-        st.info("研究助手暂未上线，项目维护者完成服务配置后即可直接对话。")
+    st.caption("AI 模型已配置" if api_key else "内置证据解读模式 · 项目方配置模型服务后自动切换为开放式 AI 对话")
     if "research_history" not in st.session_state:
         st.session_state.research_history = []
     history = st.session_state.research_history
@@ -194,16 +248,16 @@ with ai:
     for item in history:
         with st.chat_message(item["role"], avatar="📊" if item["role"] == "assistant" else None):
             st.write(item["content"])
-    prompt = st.chat_input("例如：低波组合的优势在当前参数下有多大？", disabled=not bool(api_key))
+    prompt = st.chat_input("例如：低波组合的优势在当前参数下有多大？")
     if prompt:
         history.append({"role": "user", "content": prompt[:1600]})
         with st.chat_message("user"):
             st.write(prompt)
-        evidence_pack = build_evidence(start, end, board, measure, weight, spread, ranked)
+        evidence_pack = build_evidence(start, end, board, measure, weight, spread, ranked, source_note)
         with st.chat_message("assistant", avatar="📊"):
             with st.spinner("正在分析当前实验结果…"):
                 try:
-                    answer = ask_free_model(api_key, history, evidence_pack)
+                    answer = ask_free_model(api_key, history, evidence_pack) if api_key else explain_without_model(history, evidence_pack)
                 except (RuntimeError, ValueError) as exc:
                     st.error(str(exc))
                 else:

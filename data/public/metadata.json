@@ -1,0 +1,23 @@
+{
+  "source": "Tushare Pro",
+  "download_date": "2026-11-24",
+  "seed": REDACTED,
+  "target_by_board": {
+    "主板": 50,
+    "创业板": 25,
+    "科创板": 25
+  },
+  "selected_stocks": 100,
+  "fetched_stocks": 100,
+  "failed_stocks": [],
+  "daily_rows": 96778,
+  "formation_rows": 4500,
+  "portfolio_rows": 1350,
+  "first_return_month": "2022-04-01",
+  "last_return_month": "2025-12-01",
+  "limitations": [
+    "Stratified 100-stock exploratory cohort, not full A-share universe",
+    "Current name filter cannot reconstruct historical ST periods",
+    "Equal weight only; no market-cap weights or factor-adjusted alpha"
+  ]
+}
