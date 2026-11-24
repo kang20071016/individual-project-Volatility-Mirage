@@ -1,6 +1,7 @@
 """Evidence-aware chat adapter for OpenRouter's free model router."""
 
 import requests
+from analysis import spread_diagnostics
 
 ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 MODEL = "openrouter/free"
@@ -16,6 +17,7 @@ SYSTEM_PROMPT = """你是 Volatility Mirage 的 A 股低波动异象研究助手
 
 def build_evidence(start, end, board, measure, weight, spread, ranked):
     """A compact, reproducible snapshot of the current simulated experiment."""
+    stats, _, rolling = spread_diagnostics(spread)
     annual = {f"D{int(row.decile)}": round(float(row.annual), 2) for row in ranked.itertuples()}
     positive_years = int((spread.groupby(spread.index.year).sum() > 0).sum())
     return {
@@ -27,7 +29,11 @@ def build_evidence(start, end, board, measure, weight, spread, ranked):
             "years_observed": int(spread.index.year.nunique()),
             "months_observed": int(len(spread)),
             "annualized_return_percent_by_decile": annual,
+            "newey_west_t_statistic": round(stats["t"], 3),
+            "newey_west_95pct_interval_percentage_points": [round(stats["ci_low"] * 100, 3), round(stats["ci_high"] * 100, 3)],
+            "latest_rolling_12m_spread_percentage_points": round(float(rolling.spread.iloc[-1]), 3) if not rolling.empty else None,
         },
+        "method_note": "统计量仅对模拟月度序列计算；Newey-West 使用 Bartlett 核、最多 6 阶滞后。",
     }
 
 

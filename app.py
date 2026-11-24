@@ -8,6 +8,7 @@ import altair as alt
 import numpy as np
 import pandas as pd
 import streamlit as st
+from analysis import spread_diagnostics
 from research_chat import ask_free_model, build_evidence
 
 st.set_page_config(page_title="Volatility Mirage", page_icon="📈", layout="wide")
@@ -71,6 +72,7 @@ monthly["value"] = monthly.groupby("decile")["ret"].transform(lambda s: (1+s).cu
 monthly["组合"] = monthly.decile.map({1:"低波组合 D1",10:"高波组合 D10"})
 wide = monthly.pivot(index="date", columns="decile", values="ret")
 spread = wide[1]-wide[10]
+spread_stats, annual_spread, rolling_spread = spread_diagnostics(spread)
 ranked = monthly.groupby("decile", as_index=False).ret.mean()
 ranked["annual"] = ((1+ranked.ret)**12-1)*100
 ranked["组别"] = ranked.decile.map(lambda n:f"D{n}")
@@ -118,9 +120,31 @@ with lab:
     st.altair_chart(line_chart,width="stretch")
     st.altair_chart(bar_chart,width="stretch")
 with evidence:
-    st.subheader("从现象走向证据")
-    st.altair_chart(heat_chart,width="stretch")
-    st.info("真实数据接入后在此显示显著性检验、风险调整 Alpha、IVOL 回归和稳健性。当前没有实证统计量。")
+    st.subheader("模拟证据诊断")
+    st.caption("以下统计量只对当前筛选后的模拟月度收益差计算，用于展示研究流程，不构成真实 A 股的显著性结论。")
+    s1, s2, s3 = st.columns(3)
+    s1.metric("低波－高波月均差", f"{spread_stats['mean']*100:+.2f} 个百分点")
+    s2.metric("Newey–West t 值", f"{spread_stats['t']:+.2f}")
+    s3.metric("模拟 95% 区间", f"[{spread_stats['ci_low']*100:+.2f}, {spread_stats['ci_high']*100:+.2f}] pp")
+    left, right = st.columns(2, gap="large")
+    with left:
+        st.markdown("#### 年度收益差")
+        annual_chart = style(alt.Chart(annual_spread).mark_bar().encode(
+            x=alt.X("year:O", title="年份"), y=alt.Y("spread:Q", title="低波－高波（百分点）"),
+            color=alt.condition(alt.datum.spread >= 0, alt.value(CYAN), alt.value(CORAL)),
+            tooltip=["year:O", alt.Tooltip("spread:Q", format="+.2f"), "months:Q"]).properties(height=260))
+        st.altair_chart(annual_chart, width="stretch")
+    with right:
+        st.markdown("#### 滚动 12 个月收益差")
+        rolling_chart = style(alt.Chart(rolling_spread).mark_line(color=CYAN, strokeWidth=2).encode(
+            x=alt.X("date:T", title="日期"), y=alt.Y("spread:Q", title="12 个月收益差（百分点）"),
+            tooltip=[alt.Tooltip("date:T", format="%Y-%m"), alt.Tooltip("spread:Q", format="+.2f")]).properties(height=260))
+        st.altair_chart(rolling_chart, width="stretch")
+    st.markdown("#### 分季度稳健性地图")
+    st.altair_chart(heat_chart, width="stretch")
+    with st.expander("统计口径与待完成检验"):
+        st.write("年度和滚动收益差为月度 D1－D10 收益差的算术和；区间为 Newey–West（Bartlett 核、最多 6 阶滞后）标准误构造的正态近似区间。月份重叠会影响滚动曲线的独立性。")
+        st.write("正式实证还需要全市场历史样本、退市与 ST 处理、风险因子调整、显著性与子样本稳健性检验。")
 with audit_tab:
     st.subheader("真实数据小样本体检")
     st.write("先验证字段、日期和缺失，再扩大到全市场。这一页与前面的模拟图表相互独立。")
@@ -129,6 +153,22 @@ with audit_tab:
         audit_rows = json.loads(audit_path.read_text(encoding="utf-8"))
         st.dataframe(pd.DataFrame(audit_rows), width="stretch", hide_index=True)
         st.caption("来源：本机 Tushare 小样本探针；原始记录保存在 Git 忽略目录。它只能证明所测字段可用，尚不能支持低波异象结论。")
+        pilot_frames = []
+        for path in sorted(audit_path.parent.glob("*_*.csv")):
+            frame = pd.read_csv(path, usecols=["trade_date", "ts_code", "adjusted_close"], parse_dates=["trade_date"])
+            frame = frame.dropna(subset=["adjusted_close"]).sort_values("trade_date")
+            if not frame.empty and frame.adjusted_close.iloc[0] != 0:
+                frame["relative_close"] = frame.adjusted_close / frame.adjusted_close.iloc[0]
+                pilot_frames.append(frame)
+        if pilot_frames:
+            st.markdown("#### 两只股票的复权价格路径（真实小样本）")
+            pilot = pd.concat(pilot_frames, ignore_index=True)
+            pilot_chart = style(alt.Chart(pilot).mark_line(strokeWidth=2).encode(
+                x=alt.X("trade_date:T", title="交易日"), y=alt.Y("relative_close:Q", title="区间首日归一化价格（=1）", scale=alt.Scale(zero=False)),
+                color=alt.Color("ts_code:N", title="股票代码"),
+                tooltip=["ts_code:N", alt.Tooltip("trade_date:T", format="%Y-%m-%d"), alt.Tooltip("relative_close:Q", format=".3f")]).properties(height=260))
+            st.altair_chart(pilot_chart, width="stretch")
+            st.caption("只展示本机 Tushare 探针采集的个股价格路径；两只股票不能构造有效的十分位组合或支持总体推断。")
     else:
         st.info("此环境尚无本地探针结果。按 docs/data-sources.md 的步骤配置 TUSHARE_TOKEN 后运行 scripts/probe_tushare.py。")
 with ai:

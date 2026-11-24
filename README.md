@@ -9,7 +9,7 @@ python -m pip install -r requirements.txt
 streamlit run app.py
 ```
 
-展开左侧参数面板，可切换年份、板块、波动率口径和组合权重。首页图表随之更新。证据中心尚未接入真实统计检验。
+展开左侧参数面板，可切换年份、板块、波动率口径和组合权重。首页图表随之更新。“证据中心”展示模拟低高波收益差的年度分布、滚动 12 个月走势和 Newey–West 统计量，用于演示研究方法，不能当作真实 A 股显著性结论。
 
 ## 研究助手（免费模型）
 
@@ -23,7 +23,7 @@ streamlit run app.py
 
 应用固定调用 `openrouter/free`，不会自动切换到付费模型。免费模型有调用次数限制，且不同请求可能路由到不同模型；[查看官方说明](https://openrouter.ai/collections/free-models/)。
 
-“数据体检”页读取本机 `data/raw/pilot/audit.json`，展示 Tushare 字段探针结果。此目录被 Git 忽略，云端部署默认不会显示本地记录。运行探针时，先在本机环境设置 `TUSHARE_TOKEN`，再执行 `python scripts/probe_tushare.py`。
+“数据体检”页读取本机 `data/raw/pilot/audit.json` 和两只股票的探针 CSV，展示 Tushare 字段审计与真实复权价格路径。此目录被 Git 忽略，云端部署默认不会显示本地记录。两只股票不足以支持低波异象推断。运行探针时，先在本机环境设置 `TUSHARE_TOKEN`，再执行 `python scripts/probe_tushare.py`。
 
 研究路线：数据与样本审计 → 波动率指标 → 十分位分组和下月收益 → 统计检验 → 稳健性分析 → 有依据的 AI 解读。
 
