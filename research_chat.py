@@ -2,6 +2,7 @@
 
 import requests
 from analysis import spread_diagnostics
+from chat_quota import reserve_request
 
 ENDPOINT = "https://api.deepseek.com/chat/completions"
 MODEL = "deepseek-flash"
@@ -38,22 +39,25 @@ def build_evidence(start, end, board, measure, weight, spread, ranked, source_no
     }
 
 
-def ask_deepseek(api_key, history, evidence, timeout=60):
+def ask_deepseek(api_key, history, evidence, session_id, timeout=60):
     """Send a bounded conversation; return answer text or a safe, actionable error."""
     if not api_key or not api_key.strip():
         raise ValueError("项目尚未配置 DeepSeek API Key。")
+    if not history or history[-1].get("role") != "user" or len(history[-1].get("content", "")) > 1000:
+        raise ValueError("问题长度不能超过 1000 字。")
     import json
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "system", "content": "当前界面证据包：" + json.dumps(evidence, ensure_ascii=False)},
     ]
-    messages.extend({"role": item["role"], "content": item["content"][:1600]} for item in history[-12:])
+    messages.extend({"role": item["role"], "content": item["content"][:1000]} for item in history[-8:])
+    reserve_request(session_id)
     try:
         response = requests.post(
             ENDPOINT,
             headers={"Authorization": f"Bearer {api_key.strip()}", "Content-Type": "application/json"},
-            json={"model": MODEL, "messages": messages, "thinking": {"type": "disabled"}, "temperature": 0.3, "max_tokens": 1000},
+            json={"model": MODEL, "messages": messages, "thinking": {"type": "disabled"}, "temperature": 0.3, "max_tokens": 700},
             timeout=timeout,
         )
     except requests.RequestException as exc:

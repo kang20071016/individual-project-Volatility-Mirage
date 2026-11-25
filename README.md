@@ -34,6 +34,8 @@ Windows 上也可双击 `start-preview.bat`，然后打开 `http://localhost:850
 2. 在 Streamlit Community Cloud 的应用设置 → Secrets 中保存 `DEEPSEEK_API_KEY = "你的密钥"`。本地运行时，也可设置同名环境变量或使用被 Git 忽略的 `.streamlit/secrets.toml`。
 3. 重新打开应用，研究助手会从内置解读切换为 AI 对话。不要把密钥提交到 GitHub，也不要在页面上显示密钥。
 
+本地可运行 `python scripts/configure_deepseek.py`，在终端的隐藏输入提示中粘贴密钥，脚本会写入 Git 忽略的 `.streamlit/secrets.toml`。公开部署时只在 Streamlit Cloud Secrets 中设置。服务端使用 SQLite 记录调用：默认全站每 24 小时最多 30 次、每分钟最多 4 次、每会话每 24 小时最多 8 次且两次发送至少间隔 12 秒；单条输入最多 1000 字，单次输出最多 700 token。服务器重启或多实例部署会重置/分散本地计数，不能把此机制当作账户级硬额度上限，需同时关注 DeepSeek 账户余额。
+
 应用调用 DeepSeek 的 `deepseek-flash` 模型，使用官方 Chat Completions 接口。API 用量可能收费；[查看官方模型与价格](https://api-docs.deepseek.com/quick_start/pricing/)。密钥由服务器读取，访客无需输入。
 
 “数据体检”页读取本机 `data/raw/pilot/audit.json` 和两只股票的探针 CSV，展示 Tushare 字段审计与真实复权价格路径。此目录被 Git 忽略，云端部署默认不会显示本地记录。两只股票不足以支持低波异象推断。运行探针时，先在本机环境设置 `TUSHARE_TOKEN`，再执行 `python scripts/probe_tushare.py`。

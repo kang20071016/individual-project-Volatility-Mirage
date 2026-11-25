@@ -2,6 +2,7 @@
 
 import json
 import os
+import uuid
 from pathlib import Path
 
 import altair as alt
@@ -241,6 +242,8 @@ with ai:
     st.caption("AI 模型已配置" if api_key else "内置证据解读模式 · 项目方配置模型服务后自动切换为开放式 AI 对话")
     if "research_history" not in st.session_state:
         st.session_state.research_history = []
+    if "research_session_id" not in st.session_state:
+        st.session_state.research_session_id = uuid.uuid4().hex
     history = st.session_state.research_history
     if not history:
         with st.chat_message("assistant", avatar="📊"):
@@ -248,16 +251,16 @@ with ai:
     for item in history:
         with st.chat_message(item["role"], avatar="📊" if item["role"] == "assistant" else None):
             st.write(item["content"])
-    prompt = st.chat_input("例如：低波组合的优势在当前参数下有多大？")
+    prompt = st.chat_input("例如：低波组合的优势在当前参数下有多大？", max_chars=1000)
     if prompt:
-        history.append({"role": "user", "content": prompt[:1600]})
+        history.append({"role": "user", "content": prompt[:1000]})
         with st.chat_message("user"):
             st.write(prompt)
         evidence_pack = build_evidence(start, end, board, measure, weight, spread, ranked, source_note)
         with st.chat_message("assistant", avatar="📊"):
             with st.spinner("正在分析当前实验结果…"):
                 try:
-                    answer = ask_deepseek(api_key, history, evidence_pack) if api_key else explain_without_model(history, evidence_pack)
+                    answer = ask_deepseek(api_key, history, evidence_pack, st.session_state.research_session_id) if api_key else explain_without_model(history, evidence_pack)
                 except (RuntimeError, ValueError) as exc:
                     st.error(str(exc))
                 else:
