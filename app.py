@@ -1,4 +1,4 @@
-"""Volatility Mirage visual prototype. All displayed observations are simulated."""
+"""Volatility Mirage interactive A-share research experience."""
 
 import json
 import os
@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 from analysis import spread_diagnostics
-from research_chat import ask_deepseek, build_evidence, explain_without_model
+from research_chat import build_evidence, explain_without_model, stream_deepseek
 
 st.set_page_config(page_title="Volatility Mirage", page_icon="📈", layout="wide")
 CYAN, CORAL, MUTED = "#39dce5", "#f08876", "#91a7b6"
@@ -20,9 +20,9 @@ st.markdown("""
 .stApp {background-color:#07131f;background-image:radial-gradient(circle at 86% 5%,rgba(25,176,189,.13),transparent 31%),linear-gradient(rgba(58,133,151,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(58,133,151,.035) 1px,transparent 1px);background-size:auto,36px 36px,36px 36px;color:#e7f3f5}
 .block-container {max-width:1540px;padding-top:1.5rem}
 section[data-testid='stSidebar'] {background:#0a1b2a;border-right:1px solid #254255}
-div[data-testid='stTabs'] button {font-weight:600;letter-spacing:.02em}
+div[data-testid='stTabs'] button {font-weight:600;letter-spacing:.02em;border-radius:12px 12px 0 0}
 h1,h2,h3 {color:#e7f3f5;font-family:'Segoe UI','Microsoft YaHei',sans-serif}
-div[data-testid='stMetric'] {background:#102235;border:1px solid #254255;border-radius:10px;padding:.65rem .9rem}
+div[data-testid='stMetric'] {background:linear-gradient(135deg,#102235,#0c1b2b);border:1px solid #254255;border-radius:16px;padding:.85rem 1rem;box-shadow:0 12px 35px rgba(0,0,0,.14)}
 div[data-testid='stMetricLabel'] {color:#a2b9c5}
 .vm-kicker {color:#39dce5;font:600 .72rem Consolas,monospace;letter-spacing:.2em}
 .vm-title {font-size:clamp(2rem,4vw,3.5rem);font-weight:700;letter-spacing:-.045em;margin:.1rem 0}
@@ -32,8 +32,19 @@ div[data-testid='stMetricLabel'] {color:#a2b9c5}
 .vm-tag {box-shadow:0 0 22px rgba(57,220,229,.13)}
 .vm-rule {border-top:1px solid #254255;margin:1.1rem 0}
 .vm-answer {border-left:2px solid #39dce5;padding:.2rem 0 .2rem 1rem;line-height:1.8;color:#d4e5eb}
-div[data-testid='stChatMessage'] {background:#0e2232;border:1px solid #244456;border-radius:12px}
-div[data-testid='stChatInput'] {border:1px solid #28717a;border-radius:12px}
+.vm-hero {position:relative;overflow:hidden;border:1px solid #256575;border-radius:24px;padding:1.6rem 2rem;background:radial-gradient(circle at 85% 30%,rgba(53,212,221,.16),transparent 31%),linear-gradient(115deg,#10283d 0%,#0b1b2d 70%);box-shadow:0 20px 60px rgba(0,0,0,.22)}
+.vm-hero:after {content:'';position:absolute;right:-90px;top:-110px;width:340px;height:340px;border:1px solid rgba(57,220,229,.22);border-radius:50%;box-shadow:0 0 0 42px rgba(57,220,229,.035),0 0 0 90px rgba(57,220,229,.025);pointer-events:none}
+.vm-hero .vm-title {position:relative;z-index:1}
+.vm-hero .vm-sub {position:relative;z-index:1;margin-bottom:0}
+.vm-step {border:1px solid #244456;border-radius:15px;padding:.75rem 1rem;background:#0d2131;color:#a8c5ce;font-size:.82rem}
+.vm-step b {color:#39dce5;margin-right:.35rem}
+div[data-testid='stChatMessage'] {background:linear-gradient(135deg,#0e2232,#0b1b2a);border:1px solid #244456;border-radius:18px;box-shadow:0 12px 30px rgba(0,0,0,.12)}
+div[data-testid='stChatMessageAvatar'] img {border-radius:50%;border:2px solid #34727b;background:#0b1b2a}
+div[data-testid='stChatInput'] {border:1px solid #28717a;border-radius:16px;box-shadow:0 0 28px rgba(57,220,229,.08)}
+.vm-thinking {display:inline-flex;align-items:center;gap:.35rem;color:#9be9e7;background:#102b3a;border:1px solid #2c7880;border-radius:999px;padding:.5rem .9rem;font-size:.85rem;box-shadow:0 0 22px rgba(57,220,229,.14)}
+.vm-dot {width:6px;height:6px;background:#39dce5;border-radius:50%;animation:vm-pulse 1.2s infinite ease-in-out}
+.vm-dot:nth-child(2) {animation-delay:.18s}.vm-dot:nth-child(3) {animation-delay:.36s}
+@keyframes vm-pulse {0%,70%,100%{opacity:.25;transform:translateY(0)}35%{opacity:1;transform:translateY(-4px)}}
 </style>""", unsafe_allow_html=True)
 
 @st.cache_data
@@ -54,7 +65,14 @@ def style(chart):
 public_dir = Path(__file__).parent / "data" / "public"
 real_path = public_dir / "portfolio_monthly.csv"
 real_available = real_path.exists()
-st.markdown('<div class="vm-kicker">MARKET RESEARCH / INTERACTIVE LAB</div><div class="vm-title">Volatility <span>Mirage</span></div><div class="vm-sub">A股低波动异象交互研究台 · 从风险收益倒挂到可验证的证据</div><div class="vm-rule"></div>', unsafe_allow_html=True)
+asset_dir = Path(__file__).parent / "assets"
+assistant_avatar = str(asset_dir / "assistant-cat.png")
+user_avatar = str(asset_dir / "user-fox.png")
+st.markdown('<div class="vm-hero"><div class="vm-kicker">MARKET RESEARCH / INTERACTIVE LAB</div><div class="vm-title">Volatility <span>Mirage</span></div><div class="vm-sub">A 股低波动异象交互研究台 · 探索现象，检验证据，和波波一起追问答案</div></div>', unsafe_allow_html=True)
+step_a, step_b, step_c = st.columns(3)
+step_a.markdown('<div class="vm-step"><b>01</b> 观察 · 发现异常走势</div>', unsafe_allow_html=True)
+step_b.markdown('<div class="vm-step"><b>02</b> 实验 · 改变筛选条件</div>', unsafe_allow_html=True)
+step_c.markdown('<div class="vm-step"><b>03</b> 对话 · 追问研究证据</div>', unsafe_allow_html=True)
 
 with st.sidebar:
     st.header("实验参数")
@@ -139,9 +157,31 @@ with overview:
         st.altair_chart(heat_chart,width="stretch")
 with lab:
     st.subheader("改变设定，观察图表如何变化")
-    st.write(f"当前参数：{start}—{end} · {board} · {measure} · {weight}。展开左侧参数面板即可切换。")
-    st.altair_chart(line_chart,width="stretch")
-    st.altair_chart(bar_chart,width="stretch")
+    st.caption(f"当前参数：{start}—{end} · {board} · {measure} · {weight}。左侧面板可切换数据和筛选范围。")
+    choice_col, window_col = st.columns(2)
+    compare_decile = choice_col.selectbox("拿低波 D1 与哪一组比较？", list(range(2, 11)), index=8, format_func=lambda n: f"D{n}" + (" · 高波" if n == 10 else ""))
+    roll_window = window_col.slider("观察窗口（月）", 3, 24, 12)
+    pair = monthly[monthly.decile.isin([1, compare_decile])].copy()
+    pair["组合"] = pair.decile.map({1: "低波 D1", compare_decile: f"对照 D{compare_decile}"})
+    pair_chart = style(alt.Chart(pair).mark_line(strokeWidth=2.7).encode(
+        x=alt.X("date:T", title="日期"), y=alt.Y("value:Q", title="累计净值（起点=1）", scale=alt.Scale(zero=False)),
+        color=alt.Color("组合:N", scale=alt.Scale(domain=["低波 D1", f"对照 D{compare_decile}"], range=[CYAN, CORAL])),
+        tooltip=[alt.Tooltip("date:T", format="%Y-%m"), "组合:N", alt.Tooltip("value:Q", format=".3f")]).properties(height=300))
+    pair_spread = (wide[1] - wide[compare_decile]).dropna()
+    roll_values = pair_spread.rolling(roll_window, min_periods=roll_window).sum().mul(100).dropna().rename("spread").reset_index()
+    l1, l2 = st.columns(2, gap="large")
+    with l1:
+        st.markdown("#### 组合路径")
+        st.altair_chart(pair_chart, width="stretch")
+    with l2:
+        st.markdown(f"#### 滚动 {roll_window} 个月收益差")
+        if roll_values.empty:
+            st.info("当前样本不足这个观察窗口，试试缩短月份或扩大年份。")
+        else:
+            st.altair_chart(style(alt.Chart(roll_values).mark_area(line={"color": CYAN}, color=CYAN, opacity=.2).encode(
+                x=alt.X("date:T", title="日期"), y=alt.Y("spread:Q", title="D1－对照组（百分点）"),
+                tooltip=[alt.Tooltip("date:T", format="%Y-%m"), alt.Tooltip("spread:Q", format="+.2f")]).properties(height=300)), width="stretch")
+    st.caption(f"D1 对 D{compare_decile}：月均差 {pair_spread.mean()*100:+.2f} 个百分点。滚动窗口会重叠，曲线只用于观察时段变化。")
     st.markdown("#### 板块对照 · D1－D10 月均收益差")
     comparison = all_boards_data.groupby(["board", "date", "decile"], as_index=False).ret.mean()
     comparison = comparison[comparison.decile.isin([1, 10])].pivot(index=["board", "date"], columns="decile", values="ret").dropna().reset_index()
@@ -228,41 +268,92 @@ with audit_tab:
     else:
         st.info("此环境尚无本地探针结果。按 docs/data-sources.md 的步骤配置 TUSHARE_TOKEN 后运行 scripts/probe_tushare.py。")
 with ai:
+    if st.session_state.get("research_chat_version") != 2:
+        previous_chat = st.session_state.get("research_history", [])
+        if previous_chat:
+            st.session_state.research_legacy_history = previous_chat
+        st.session_state.research_history = []
+        st.session_state.research_chat_version = 2
     title_col, clear_col = st.columns([5, 1])
-    title_col.subheader("研究助手 · 自由对话")
+    title_col.subheader("和波波一起研究 🐱")
     if clear_col.button("清空对话", use_container_width=True):
         st.session_state.research_history = []
+        st.session_state.research_legacy_history = []
         st.rerun()
-    st.caption("可以自由提问和连续追问。助手会读取当前筛选参数及统计量，并区分真实探索样本与模拟演示。")
+    st.caption("自由提问、连续追问，或者点一个灵感问题。波波会结合当前筛选结果回答。")
     try:
         stored_key = st.secrets.get("DEEPSEEK_API_KEY", "")
     except (FileNotFoundError, OSError):
         stored_key = ""
     api_key = stored_key or os.getenv("DEEPSEEK_API_KEY", "")
-    st.caption("AI 模型已配置" if api_key else "内置证据解读模式 · 项目方配置模型服务后自动切换为开放式 AI 对话")
+    st.caption("✨ DeepSeek 对话已开启" if api_key else "内置证据解读模式 · 配置模型服务后可开放式对话")
     if "research_history" not in st.session_state:
         st.session_state.research_history = []
     if "research_session_id" not in st.session_state:
         st.session_state.research_session_id = uuid.uuid4().hex
     history = st.session_state.research_history
     if not history:
-        with st.chat_message("assistant", avatar="📊"):
-            st.write("你好，我可以根据当前筛选条件解释图表、讨论低波动异象的检验方法，也能接着你的问题追问。你想从哪里开始？")
+        with st.chat_message("assistant", avatar=assistant_avatar):
+            st.write("嗨，我是波波 🐱！想先看走势、找反转年份，还是问问数据靠不靠谱？")
     for item in history:
-        with st.chat_message(item["role"], avatar="📊" if item["role"] == "assistant" else None):
+        with st.chat_message(item["role"], avatar=assistant_avatar if item["role"] == "assistant" else user_avatar):
             st.write(item["content"])
-    prompt = st.chat_input("例如：低波组合的优势在当前参数下有多大？", max_chars=1000)
+            if item.get("table"):
+                st.caption(item["table_caption"])
+                st.dataframe(pd.DataFrame(item["table"]), width="stretch", hide_index=True)
+    q1, q2, q3 = st.columns(3)
+    quick_prompt = None
+    if q1.button("📈 一句话看结论", use_container_width=True):
+        quick_prompt = "用一句话概括当前筛选结果，注意数据边界"
+    if q2.button("🔎 哪些年份反转？", use_container_width=True):
+        quick_prompt = "哪些年份低波没有跑赢高波？请简要解释如何看年度图"
+    if q3.button("📋 给我收益表", use_container_width=True):
+        quick_prompt = "请展示当前十分位年化收益表，并用一句话说明怎么读"
+    prompt = quick_prompt or st.chat_input("问波波：比如‘这个结果稳不稳？’", max_chars=1000)
     if prompt:
-        history.append({"role": "user", "content": prompt[:1000]})
-        with st.chat_message("user"):
+        prompt = prompt[:1000]
+        history.append({"role": "user", "content": prompt})
+        with st.chat_message("user", avatar=user_avatar):
             st.write(prompt)
         evidence_pack = build_evidence(start, end, board, measure, weight, spread, ranked, source_note)
-        with st.chat_message("assistant", avatar="📊"):
-            with st.spinner("正在分析当前实验结果…"):
-                try:
-                    answer = ask_deepseek(api_key, history, evidence_pack, st.session_state.research_session_id) if api_key else explain_without_model(history, evidence_pack)
-                except (RuntimeError, ValueError) as exc:
-                    st.error(str(exc))
-                else:
+        with st.chat_message("assistant", avatar=assistant_avatar):
+            loading = st.empty()
+            loading.markdown('<div class="vm-thinking">波波正在想 <i class="vm-dot"></i><i class="vm-dot"></i><i class="vm-dot"></i></div>', unsafe_allow_html=True)
+            try:
+                if prompt.strip().lower() in {"你好", "您好", "嗨", "哈喽", "hi", "hello", "hey"}:
+                    answer = "嗨，我是波波 🐱！今天想一起研究哪张图？"
+                    loading.empty()
                     st.write(answer)
-                    history.append({"role": "assistant", "content": answer})
+                elif api_key:
+                    def answer_chunks():
+                        first = True
+                        for chunk in stream_deepseek(api_key, history, evidence_pack, st.session_state.research_session_id):
+                            if first:
+                                loading.empty()
+                                first = False
+                            yield chunk
+                    answer = st.write_stream(answer_chunks())
+                else:
+                    answer = explain_without_model(history, evidence_pack)
+                    loading.empty()
+                    st.write(answer)
+            except (RuntimeError, ValueError) as exc:
+                loading.empty()
+                history.pop()
+                st.error(str(exc))
+            else:
+                item = {"role": "assistant", "content": answer}
+                if any(word in prompt for word in ("表格", "收益表", "收益率表", "年度表", "数据表", "列表")):
+                    if any(word in prompt for word in ("年度", "年份", "逐年")):
+                        table = annual_spread[["year", "spread", "months"]].rename(columns={"year": "年份", "spread": "D1－D10 收益差（百分点）", "months": "样本月数"}).round(2)
+                    else:
+                        table = ranked[["组别", "annual"]].rename(columns={"annual": "年化收益率（%）"}).round(2)
+                    item["table"] = table.to_dict("records")
+                    item["table_caption"] = f"按生成时筛选条件计算：{start}—{end} · {board} · {source_note}"
+                    st.caption(item["table_caption"])
+                    st.dataframe(table, width="stretch", hide_index=True)
+                history.append(item)
+    if st.session_state.get("research_legacy_history"):
+        with st.expander("查看升级前的对话"):
+            for old_item in st.session_state.research_legacy_history:
+                st.write(("波波：" if old_item["role"] == "assistant" else "你：") + old_item["content"])
