@@ -14,6 +14,7 @@ import pandas as pd
 import tushare as ts
 
 BOARD_TARGETS = {"主板": 50, "创业板": 25, "科创板": 25}
+DEFAULT_SEED = 20261125
 
 
 def board_of(code):
@@ -27,7 +28,7 @@ def board_of(code):
     return None
 
 
-def choose_universe(pro, seed=REDACTED):
+def choose_universe(pro, seed=DEFAULT_SEED):
     frames = [pro.stock_basic(exchange="", list_status=status, fields="ts_code,name,list_date,delist_date") for status in ("L", "D")]
     stocks = pd.concat(frames, ignore_index=True).drop_duplicates("ts_code")
     stocks["board"] = stocks.ts_code.map(board_of)
@@ -128,7 +129,7 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     portfolio.to_csv(args.output / "portfolio_monthly.csv", index=False, encoding="utf-8")
     meta = {"source": "Tushare Pro", "download_date": pd.Timestamp.now().date().isoformat(),
-            "seed": REDACTED, "target_by_board": BOARD_TARGETS, "selected_stocks": len(universe),
+            "seed": DEFAULT_SEED, "target_by_board": BOARD_TARGETS, "selected_stocks": len(universe),
             "fetched_stocks": len(frames), "failed_stocks": failures, "daily_rows": len(daily),
             "formation_rows": len(panel), "portfolio_rows": len(portfolio),
             "first_return_month": portfolio.date.min().date().isoformat(),

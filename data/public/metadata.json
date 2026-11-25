@@ -1,7 +1,6 @@
 {
   "source": "Tushare Pro",
   "download_date": "2026-11-24",
-  "seed": REDACTED,
   "target_by_board": {
     "主板": 50,
     "创业板": 25,
