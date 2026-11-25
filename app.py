@@ -278,7 +278,6 @@ with ai:
     title_col.subheader("和波波一起研究 🐱")
     if clear_col.button("清空对话", use_container_width=True):
         st.session_state.research_history = []
-        st.session_state.research_legacy_history = []
         st.rerun()
     st.caption("自由提问、连续追问，或者点一个灵感问题。波波会结合当前筛选结果回答。")
     try:
