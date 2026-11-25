@@ -111,7 +111,7 @@ line_chart = style(alt.Chart(monthly[monthly.decile.isin([1,10])]).mark_line(str
     tooltip=[alt.Tooltip("date:T",format="%Y-%m"),"组合:N",alt.Tooltip("value:Q",format=".3f")]).properties(height=320))
 bar_chart = style(alt.Chart(ranked).mark_bar().encode(
     x=alt.X("组别:N",sort=[f"D{i}" for i in range(1,11)],title="波动率十分位（D1最低）"),
-    y=alt.Y("annual:Q",title="模拟年化收益率（%）"),
+    y=alt.Y("annual:Q",title="年化收益率（%）"),
     color=alt.Color("色组:N",scale=alt.Scale(domain=["低波","中间组","高波"],range=[CYAN,"#38798b",CORAL]),legend=None),
     tooltip=["组别:N",alt.Tooltip("annual:Q",format=".2f")]).properties(height=220))
 heat_chart = style(alt.Chart(heat).mark_rect().encode(

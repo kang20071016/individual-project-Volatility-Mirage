@@ -9,6 +9,8 @@ python -m pip install -r requirements.txt
 streamlit run app.py
 ```
 
+Windows 上也可双击 `start-preview.bat`，然后打开 `http://localhost:8503/`。本地预览依赖运行中的终端，关闭终端或重启电脑后需重新启动；`localhost` 不是可长期分享的线上地址。
+
 左侧可切换数据模式、年份、板块与实验参数。真实样本仅开放已计算的 60 日历史波动率和等权组合；IVOL 与市值加权只在模拟模式提供，不冒充真实结果。概览、交互实验、证据中心、数据体检和研究助手构成完整体验。
 
 ## 真实样本与方法
