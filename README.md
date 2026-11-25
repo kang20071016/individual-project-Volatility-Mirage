@@ -24,17 +24,17 @@ Windows 上也可双击 `start-preview.bat`，然后打开 `http://localhost:850
 
 当前样本形成 45 个月的组合收益、约 9.7 万条日行情记录。**这是探索性研究，不能直接代表全 A 股低波异象。**固定的 100 股队列有抽样误差；当前名称筛选不能重建历史 ST；未做市值加权、交易成本、风险因子调整或全市场覆盖。复现时使用本机 `TUSHARE_TOKEN` 运行 `python scripts/build_research_sample.py`，个股数据不会提交到 GitHub。
 
-## 研究助手（免费模型）
+## 研究助手（DeepSeek）
 
 研究助手支持自由输入、多轮追问，并把当前筛选参数和统计量一并交给模型，明确区分真实探索样本与模拟演示。访客无需注册或输入 API Key。未配置模型服务时仍可使用明确标注的“内置证据解读模式”，回答由本地计算规则生成；配置后自动切换为开放式 AI 对话。
 
 项目维护者上线前只需配置一次：
 
-1. 在 [OpenRouter 的密钥页面](https://openrouter.ai/keys) 创建 API Key。
-2. 在 Streamlit Community Cloud 的应用设置 → Secrets 中保存 `OPENROUTER_API_KEY = "你的密钥"`。本地运行时，也可设置同名环境变量或使用被 Git 忽略的 `.streamlit/secrets.toml`。
+1. 在 [DeepSeek 开放平台](https://platform.deepseek.com/api_keys) 创建 API Key。
+2. 在 Streamlit Community Cloud 的应用设置 → Secrets 中保存 `DEEPSEEK_API_KEY = "你的密钥"`。本地运行时，也可设置同名环境变量或使用被 Git 忽略的 `.streamlit/secrets.toml`。
 3. 重新打开应用，研究助手会从内置解读切换为 AI 对话。不要把密钥提交到 GitHub，也不要在页面上显示密钥。
 
-应用固定调用 `openrouter/free`，不会自动切换到付费模型。免费模型有调用次数限制，且不同请求可能路由到不同模型；[查看官方说明](https://openrouter.ai/collections/free-models/)。
+应用调用 DeepSeek 的 `deepseek-flash` 模型，使用官方 Chat Completions 接口。API 用量可能收费；[查看官方模型与价格](https://api-docs.deepseek.com/quick_start/pricing/)。密钥由服务器读取，访客无需输入。
 
 “数据体检”页读取本机 `data/raw/pilot/audit.json` 和两只股票的探针 CSV，展示 Tushare 字段审计与真实复权价格路径。此目录被 Git 忽略，云端部署默认不会显示本地记录。两只股票不足以支持低波异象推断。运行探针时，先在本机环境设置 `TUSHARE_TOKEN`，再执行 `python scripts/probe_tushare.py`。
 

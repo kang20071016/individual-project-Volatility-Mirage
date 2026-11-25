@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 from analysis import spread_diagnostics
-from research_chat import ask_free_model, build_evidence, explain_without_model
+from research_chat import ask_deepseek, build_evidence, explain_without_model
 
 st.set_page_config(page_title="Volatility Mirage", page_icon="📈", layout="wide")
 CYAN, CORAL, MUTED = "#39dce5", "#f08876", "#91a7b6"
@@ -234,10 +234,10 @@ with ai:
         st.rerun()
     st.caption("可以自由提问和连续追问。助手会读取当前筛选参数及统计量，并区分真实探索样本与模拟演示。")
     try:
-        stored_key = st.secrets.get("OPENROUTER_API_KEY", "")
+        stored_key = st.secrets.get("DEEPSEEK_API_KEY", "")
     except (FileNotFoundError, OSError):
         stored_key = ""
-    api_key = stored_key or os.getenv("OPENROUTER_API_KEY", "")
+    api_key = stored_key or os.getenv("DEEPSEEK_API_KEY", "")
     st.caption("AI 模型已配置" if api_key else "内置证据解读模式 · 项目方配置模型服务后自动切换为开放式 AI 对话")
     if "research_history" not in st.session_state:
         st.session_state.research_history = []
@@ -257,7 +257,7 @@ with ai:
         with st.chat_message("assistant", avatar="📊"):
             with st.spinner("正在分析当前实验结果…"):
                 try:
-                    answer = ask_free_model(api_key, history, evidence_pack) if api_key else explain_without_model(history, evidence_pack)
+                    answer = ask_deepseek(api_key, history, evidence_pack) if api_key else explain_without_model(history, evidence_pack)
                 except (RuntimeError, ValueError) as exc:
                     st.error(str(exc))
                 else:

@@ -1,10 +1,10 @@
-"""Evidence-aware chat adapter for OpenRouter's free model router."""
+"""Evidence-aware chat adapter for the DeepSeek Chat Completions API."""
 
 import requests
 from analysis import spread_diagnostics
 
-ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "openrouter/free"
+ENDPOINT = "https://api.deepseek.com/chat/completions"
+MODEL = "deepseek-flash"
 
 SYSTEM_PROMPT = """你是 Volatility Mirage 的 A 股低波动异象研究助手。用简洁、准确的中文回答。
 先读取证据包的 data_status。若为模拟模式，所有数字只能用于演示方法，引用时写明“模拟”。
@@ -38,10 +38,10 @@ def build_evidence(start, end, board, measure, weight, spread, ranked, source_no
     }
 
 
-def ask_free_model(api_key, history, evidence, timeout=45):
+def ask_deepseek(api_key, history, evidence, timeout=60):
     """Send a bounded conversation; return answer text or a safe, actionable error."""
     if not api_key or not api_key.strip():
-        raise ValueError("请先填写 OpenRouter API Key。")
+        raise ValueError("项目尚未配置 DeepSeek API Key。")
     import json
 
     messages = [
@@ -52,16 +52,18 @@ def ask_free_model(api_key, history, evidence, timeout=45):
     try:
         response = requests.post(
             ENDPOINT,
-            headers={"Authorization": f"Bearer {api_key.strip()}", "Content-Type": "application/json", "X-Title": "Volatility Mirage"},
-            json={"model": MODEL, "messages": messages, "temperature": 0.3, "max_tokens": 800},
+            headers={"Authorization": f"Bearer {api_key.strip()}", "Content-Type": "application/json"},
+            json={"model": MODEL, "messages": messages, "thinking": {"type": "disabled"}, "temperature": 0.3, "max_tokens": 1000},
             timeout=timeout,
         )
     except requests.RequestException as exc:
-        raise RuntimeError("连接 OpenRouter 失败，请检查网络后重试。") from exc
+        raise RuntimeError("连接 DeepSeek 失败，请检查网络后重试。") from exc
     if response.status_code == 401:
-        raise RuntimeError("API Key 无效或已失效，请检查 OpenRouter 密钥。")
+        raise RuntimeError("DeepSeek API Key 无效或已失效，请检查项目密钥。")
+    if response.status_code == 402:
+        raise RuntimeError("DeepSeek 账户余额不足，模型暂时不可用。")
     if response.status_code == 429:
-        raise RuntimeError("免费模型达到调用限额，请稍后再试。")
+        raise RuntimeError("DeepSeek 请求过于频繁，请稍后再试。")
     if response.status_code >= 400:
         raise RuntimeError(f"模型暂时不可用（HTTP {response.status_code}），请稍后再试。")
     try:
